@@ -1,3 +1,5 @@
+![rnote-llm](./.github/cover.jpg)
+
 ```
 Usage: rnote-llm [OPTIONS] --key <KEY> <COMMAND>
 
