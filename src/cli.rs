@@ -1,16 +1,19 @@
 use core::fmt;
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 use clap::{Subcommand, ValueEnum};
 
 #[derive(Subcommand)]
 pub enum Command {
     Single {
+        /// Input file
         file: PathBuf,
+        /// Optional output markdown file
         #[arg(required = false)]
         output_file: Option<PathBuf>,
     },
     Batch {
+        recursive: bool,
         source_folder: PathBuf,
         destination_folder: PathBuf,
     },
@@ -44,17 +47,23 @@ pub enum Prompt {
     Test,
 }
 
-impl Prompt {
-    pub fn prompt(&self) -> &'static str {
+impl Options {
+    pub fn prompt(&self) -> std::io::Result<Cow<'static, str>> {
+        if let Some(custom) = &self.custom_prompt {
+            return std::fs::read_to_string(custom).map(Into::into);
+        }
+
         const DEFAULT_PROMPT: &str = include_str!("./PROMPT.txt");
         const SUMMARIZE_PROMPT: &str = include_str!("./SUMMARIZE.txt");
         const TEST_PROMPT: &str = include_str!("./TEST.txt");
 
-        match self {
+        let prompt = match self.prompt {
             Prompt::Default => DEFAULT_PROMPT,
             Prompt::Summarize => SUMMARIZE_PROMPT,
             Prompt::Test => TEST_PROMPT,
-        }
+        };
+
+        Ok(prompt.into())
     }
 }
 

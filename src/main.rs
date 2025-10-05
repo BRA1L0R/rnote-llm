@@ -35,12 +35,7 @@ async fn export_rnote_file(
 
         let snapshot = EngineSnapshot::load_from_rnote_bytes(read)
             .await
-            .with_context(|| {
-                format!(
-                    "loading {} the snapshot into the rnote engine",
-                    input_file.as_ref().to_string_lossy()
-                )
-            })?;
+            .context("loading file into snapshot context")?;
 
         let _ = engine.load_snapshot(snapshot);
         let _ = engine.select_all_strokes();
@@ -129,25 +124,33 @@ async fn execute_job(
         .set_message(build_message("Converting to Markdown..."));
 
     let converted = convert_note(gemini_client, system_prompt, &note_png).await?;
-
     tokio::fs::create_dir_all(job.output_file.parent().unwrap()).await?;
     tokio::fs::write(&job.output_file, converted).await?;
 
     job.progress_bar.finish_with_message(build_message("Done!"));
-
     Ok(())
 }
 
+/// Recursively search directories for files
 struct DirWalker {
+    /// 0 -> top level directory
+    ///
+    /// 1 -> top level -> subdirectory
+    ///
+    /// 3 -> top level -> sub -> sub-sub
+    max_depth: usize,
     path_stack: Vec<ReadDir>,
 }
 
 impl DirWalker {
-    fn new(path: &Path) -> std::io::Result<Self> {
+    fn new(path: &Path, max_depth: usize) -> std::io::Result<Self> {
         let readdir = std::fs::read_dir(path)?;
         let path_stack = vec![readdir];
 
-        Ok(Self { path_stack })
+        Ok(Self {
+            path_stack,
+            max_depth,
+        })
     }
 }
 
@@ -156,11 +159,14 @@ impl Iterator for DirWalker {
 
     fn next(&mut self) -> Option<Self::Item> {
         let explore = self.path_stack.last_mut()?;
-
         let next = explore.next();
+
         match next {
             Some(Ok(file)) if file.file_type().unwrap().is_file() => return Some(file.path()),
-            Some(Ok(file)) if file.file_type().unwrap().is_dir() => {
+            Some(Ok(file))
+                if file.file_type().unwrap().is_dir()
+                    && self.path_stack.len() <= self.max_depth =>
+            {
                 let readdir = std::fs::read_dir(file.path()).unwrap();
                 self.path_stack.push(readdir);
             }
@@ -192,13 +198,17 @@ impl Job {
         }
     }
 
-    fn from_folder(input_folder: &Path, output_folder: &Path) -> anyhow::Result<Vec<Job>> {
+    fn from_folder(
+        input_folder: &Path,
+        output_folder: &Path,
+        max_depth: usize,
+    ) -> anyhow::Result<Vec<Job>> {
         // let readdir = std::fs::read_dir(input_folder)?;
         std::fs::create_dir(output_folder)?;
         let input_folder = input_folder.canonicalize()?;
         let output_folder = output_folder.canonicalize()?;
 
-        let readdir = DirWalker::new(&input_folder)?;
+        let readdir = DirWalker::new(&input_folder, max_depth)?;
 
         let mut jobs = vec![];
         let multi = MultiProgress::new();
@@ -230,7 +240,7 @@ async fn run() -> anyhow::Result<()> {
 
     let cmdline = Options::parse();
     let model = cmdline.model.to_gemini_model();
-    let prompt = cmdline.prompt.prompt();
+    let prompt = cmdline.prompt()?;
 
     let gemini = Gemini::with_model(cmdline.key, model)?;
 
@@ -246,7 +256,7 @@ async fn run() -> anyhow::Result<()> {
     };
 
     futures::stream::iter(jobs)
-        .map(|job| execute_job(&gemini, prompt, cmdline.skip_existing, job))
+        .map(|job| execute_job(&gemini, prompt.clone(), cmdline.skip_existing, job))
         .buffer_unordered(10)
         .try_collect::<Vec<()>>()
         .await?;
