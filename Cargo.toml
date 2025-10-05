@@ -1,0 +1,27 @@
+[package]
+name = "rnote-llm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+base64 = "0.22.1"
+clap = { version = "4.5.48", features = ["derive"] }
+env_logger = "0.11.8"
+futures = "0.3.31"
+gemini-rust = "1.5.0"
+indicatif = "0.18.0"
+log = "0.4.28"
+rnote-engine = { git = "https://github.com/flxzt/rnote.git" }
+smol = "2.0.2"
+tokio = { version = "1.47.1", features = [
+    "rt",
+    "io-util",
+    "io-std",
+    "net",
+    "time",
+    "macros",
+    "sync",
+    "signal",
+    "fs",
+] }
