@@ -204,7 +204,7 @@ impl Job {
         max_depth: usize,
     ) -> anyhow::Result<Vec<Job>> {
         // let readdir = std::fs::read_dir(input_folder)?;
-        std::fs::create_dir(output_folder)?;
+        std::fs::create_dir(output_folder).ok();
         let input_folder = input_folder.canonicalize()?;
         let output_folder = output_folder.canonicalize()?;
 
@@ -248,7 +248,8 @@ async fn run() -> anyhow::Result<()> {
         Command::Batch {
             source_folder,
             destination_folder,
-        } => Job::from_folder(&source_folder, &destination_folder)?,
+            max_depth,
+        } => Job::from_folder(&source_folder, &destination_folder, max_depth)?,
         Command::Single { file, output_file } => {
             let output_file = output_file.unwrap_or_else(|| file.with_extension("md"));
             vec![Job::new(ProgressBar::new_spinner(), &file, &output_file)]

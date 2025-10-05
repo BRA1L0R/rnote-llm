@@ -13,7 +13,9 @@ pub enum Command {
         output_file: Option<PathBuf>,
     },
     Batch {
-        recursive: bool,
+        #[arg(short, default_value_t = 1)]
+        /// Increase this value to enable recursive exploration of source subdirectories.
+        max_depth: usize,
         source_folder: PathBuf,
         destination_folder: PathBuf,
     },
@@ -76,6 +78,7 @@ impl fmt::Display for Prompt {
 #[derive(clap::Parser)]
 pub struct Options {
     #[arg(short, long, required = true)]
+    /// Gemini AI Studio API key
     pub key: String,
 
     #[arg(short, long, default_value_t = Model::Gemini25Flash)]
@@ -85,9 +88,12 @@ pub struct Options {
     pub prompt: Prompt,
 
     #[arg(short, default_value_t = false)]
+    /// Skip existing destination files from being overwritten. Useful if you want
+    /// to sync up your llm generated notes to your new handwritten notes.
     pub skip_existing: bool,
 
     #[arg(short, long, required = false)]
+    /// If specified, a path to a text file containing the system prompt
     pub custom_prompt: Option<PathBuf>,
 
     #[command(subcommand)]
